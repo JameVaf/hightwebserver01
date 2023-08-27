@@ -1,3 +1,13 @@
+#vs 2022
+bin
+temp
+.vs
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+Debug
+
 # Prerequisites
 *.d
 
