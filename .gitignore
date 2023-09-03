@@ -8,6 +8,10 @@ temp
 *.vcxproj.user
 Debug
 
+# VSCODE
+output
+.vscode 
+
 # Prerequisites
 *.d
 
