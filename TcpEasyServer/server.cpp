@@ -46,7 +46,7 @@ int main(void){
             perror("accept 失败");
         }
         
-        printf("接收到新的连接,ip:%s,port:%s...\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
+        printf("接收到新的连接,ip:%s,port:%u...\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
         //5.读取客户端的命令
         int readLen = recv(clientfd,readBuff,READBUFF,0);
         if(readLen <= 0){
@@ -57,7 +57,7 @@ int main(void){
             closesocket(clientfd);
             break;
         }else if(0 == strcmp("whoami",readBuff)){
-            int sendLen = send(clientfd,"剑风",7,0);
+            int sendLen = send(clientfd,"jame",5,0);
             if(sendLen <= 0){
                  perror("send 失败...");
             }
