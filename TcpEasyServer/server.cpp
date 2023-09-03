@@ -2,6 +2,7 @@
 #include<iostream>
 #include<windows.h>
 #include<winsock2.h>
+#pragma comment(lib,"ws2_32.lib")
 int ret = -1;
 
 #define READBUFF 1024
@@ -33,6 +34,8 @@ int main(void){
     if(-1 == ret){
         perror("listen 失败");
     }
+
+    printf("服务器开始工作....\n");
 
     //4.accept接受客户端的数据
     while(1){
