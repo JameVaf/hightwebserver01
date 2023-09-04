@@ -8,6 +8,37 @@ int ret = -1;
 #define READBUFF 1024
 char readBuff [READBUFF] = {0};
 
+enum CMD{
+    CMD_LOGIN,
+    CMD_LOGINOUT
+};
+
+//消息头
+struct DataHeader{
+    short dataLength;//数据的长度
+    short cmd ; //命令
+};
+
+//DataPackage
+struct Login{
+    char userName [32];
+    char passWord [32];
+};
+
+struct LogInResult{
+    int result;
+};
+
+struct Logout{
+    char userName [32];
+};
+
+struct LogOutResult{
+    int result;
+};
+
+
+
 int main(void){
 
     WORD ver = MAKEWORD(2,2);
@@ -38,36 +69,74 @@ int main(void){
     printf("服务器开始工作....\n");
 
     //4.accept接受客户端的数据
+    struct sockaddr_in client_addr = {};
+    int client_addr_len = sizeof(client_addr);
+    SOCKET clientfd = accept(serverfd,(sockaddr*)&client_addr,&client_addr_len);
+    if(SOCKET_ERROR == clientfd){
+        perror("accept 失败");
+    }
+
     while(1){
-        struct sockaddr_in client_addr = {};
-        int client_addr_len = sizeof(client_addr);
-        SOCKET clientfd = accept(serverfd,(sockaddr*)&client_addr,&client_addr_len);
-        if(SOCKET_ERROR == clientfd){
-            perror("accept 失败");
-        }
+       
         
         printf("接收到新的连接,ip:%s,port:%u...\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
         //5.读取客户端的命令
-        int readLen = recv(clientfd,readBuff,READBUFF,0);
+        DataHeader header = {};
+        int readLen = recv(clientfd,(char*)&header,sizeof(DataHeader),0);
         if(readLen <= 0){
             perror("read 失败...");
         }
-        if(0 == strcmp("quit",readBuff)){
-            memset(readBuff,0,READBUFF);
-            closesocket(clientfd);
-            break;
-        }else if(0 == strcmp("whoami",readBuff)){
-            int sendLen = send(clientfd,"jame",5,0);
-            if(sendLen <= 0){
-                 perror("send 失败...");
-            }
-        }else{
-            int sendLen = send(clientfd,"未知的命令",16,0);
-            if(sendLen <= 0){
-                 perror("send 失败...");
-            }
+
+           //printf("读取到的指令为:%s\n",readBuff);
+
+        printf("收到的cmd:%d,数据长度:%d\n",header.cmd,header.dataLength);
+        switch (header.cmd)
+        {
+        case CMD_LOGIN:{
+            Login login = {};
+            recv(clientfd,(char*)&login,sizeof(Login),0);
+            //省略判断用户的过程
+            LogInResult result = {0};
+            send(clientfd,(const char* )&header,sizeof(DataHeader),0);
+            send(clientfd,(const char* )&result,sizeof(LogInResult),0);
+            printf("客户端登录成功...\n");
+            printf("用户名:%s,用户密码:%s\n",login.userName,login.passWord);
+            
         }
-        memset(readBuff,0,READBUFF);
+            break;
+        case CMD_LOGINOUT:{
+            
+            Logout logout= {};
+            recv(clientfd,(char*)&logout,sizeof(Logout),0);
+            //省略判断用户的过程
+            LogOutResult result = {0};
+            send(clientfd,(const char* )&header,sizeof(DataHeader),0);
+            send(clientfd,(const char* )&result,sizeof(LogOutResult),0);
+            printf("客户端退出成功...\n");
+        }
+            break;  
+        default:{
+            printf("???\n");
+        }
+            break;
+        }
+
+        // if(0 == strcmp("quit",readBuff)){
+        //     memset(readBuff,0,READBUFF);
+        //     closesocket(clientfd);
+        //     break;
+        // }else if(0 == strcmp("whoami",readBuff)){
+        //     int sendLen = send(clientfd,"jame",5,0);
+        //     if(sendLen <= 0){
+        //          perror("send 失败...");
+        //     }
+        // }else{
+        //     int sendLen = send(clientfd,"未知的命令",16,0);
+        //     if(sendLen <= 0){
+        //          perror("send 失败...");
+        //     }
+        // }
+        // memset(readBuff,0,READBUFF);
     }
 
 

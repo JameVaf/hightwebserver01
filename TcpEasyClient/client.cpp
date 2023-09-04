@@ -9,6 +9,35 @@ int ret = -1;
 char cmdBuff [CMDBUFF] = {0};
 char readBuff [READBUFF] = {0};
 
+enum CMD{
+    CMD_LOGIN,
+    CMD_LOGINOUT
+};
+
+//消息头
+struct DataHeader{
+    short dataLength;//数据的长度
+    short cmd ; //命令
+};
+
+//DataPackage
+struct Login{
+    char userName [32];
+    char passWord [32];
+};
+
+struct LogInResult{
+    int result;
+};
+
+struct Logout{
+    char userName [32];
+};
+
+struct LogOutResult{
+    int result;
+};
+
 int main(void){
     
     WORD ver = MAKEWORD(2,2);
@@ -41,25 +70,41 @@ int main(void){
     printf("客户端开始连接...\n");
     
     while(1){
-        printf("请输入命令控制服务器:");
-        scanf("%s\n",cmdBuff);
+        DataHeader header = {};
+        Login login = {};
+        LogInResult result = {};
+    
+        printf("请输入username:");
+        std::cin>>cmdBuff;
+        strncpy(login.userName,cmdBuff,strlen(cmdBuff)+1);
+        printf("请输入password:");
+        std::cin>>cmdBuff;
+        strncpy(login.passWord,cmdBuff,strlen(cmdBuff)+1);
+        //scanf("%s\n",cmdBuff);
         //3.将命令发送给服务器
-        int sendLen = send(serverfd,cmdBuff,CMDBUFF,0);
-        if(sendLen <= 0){
-            perror("send 失败");
-        }
-        if(0 == strcmp("quit",cmdBuff)){
-            memset(cmdBuff,0,CMDBUFF);
-            break;
-        }
-        //4.从服务器读取结果
-        int readLen = recv(serverfd,readBuff,READBUFF,0);
-        if(readLen <= 0){
-            perror("recv 读取服务器失败...");
-        }
+        send(serverfd,(const char*)&header,sizeof(DataHeader),0);
+        send(serverfd,(const char*)&login,sizeof(Login),0);
 
-        printf("server send:%s\n",readBuff);
-        memset(readBuff,0,READBUFF);
+
+        recv(serverfd,(char*)&result,sizeof(LogInResult),0);
+        printf("登录的结果为:%d",result.result);
+        
+        
+        // int sendLen = send(serverfd,cmdBuff,strlen(cmdBuff)+1,0);
+        // if(sendLen <= 0){
+        //     perror("send 失败");
+        // }
+        // if(0 == strcmp("quit",cmdBuff)){
+        //     memset(cmdBuff,0,CMDBUFF);
+        //     break;
+        // }
+        // //4.从服务器读取结果
+        // int readLen = recv(serverfd,readBuff,READBUFF,0);
+        // if(readLen <= 0){
+        //     perror("recv 读取服务器失败...");
+        // }
+        // printf("server send:%s\n",readBuff);
+        // memset(readBuff,0,READBUFF);
 
 
     }
