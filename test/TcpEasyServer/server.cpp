@@ -4,12 +4,13 @@
 #include<winsock2.h>
 #include<vector>
 #include<algorithm>
+#include<string.h>
 #pragma comment(lib,"ws2_32.lib")
 int ret = -1;
 
 #define READBUFF 1024
 char readBuff [READBUFF] = {0};
-std::vector<SOCKET> sock_list ; //存放接受的socket套接字,未加入select
+std::vector<SOCKET> sock_list ; //存放接受连接的socket套接字
 
 struct fd_set fdRead;
 struct fd_set fdWrite;
@@ -18,13 +19,17 @@ struct fd_set fdExcept;
 
 
 
+
+
 //命令宏
 enum CMD{
-    CMD_LOGIN,
-    CMD_LOGOUT,
-    CMD_ERROR,
-    CMD_QUIT,
-    CMD_RESULT
+    CMD_LOGIN=1,    //登录命令
+    CMD_LOGOUT,     //登出命令
+    CMD_ERROR,      //错误的命令
+    CMD_QUIT,       //退出命令
+    CMD_LOGIN_RESULT,//登录返回结果命令
+    CMD_LOGOUT_RESULT,//登出的返回结果
+    CMD_JOIN        //其他用户加入服务器的
 };
 
 //消息头
@@ -50,7 +55,7 @@ struct LogInResult:public DataHeader{
     
     LogInResult():result(0){
         dataLength = sizeof(LogInResult);
-        cmd = CMD_RESULT;
+        cmd = CMD_LOGIN_RESULT;
     }
     int result;
     
@@ -74,10 +79,20 @@ struct LogOutResult:public DataHeader{
     
     LogOutResult():result(0){
         dataLength = sizeof(LogOutResult);
-        cmd = CMD_RESULT;
+        cmd = CMD_LOGOUT_RESULT;
     }
     int result;
     
+};
+
+//JOIN结构体
+struct Join:public DataHeader{
+    Join():ipAddress({0}){
+        dataLength = sizeof(Join);
+        cmd = CMD_JOIN;
+       
+    }
+    char ipAddress [32] ;
 };
 
 //添加套接字到select
@@ -120,15 +135,25 @@ int main(void){
     printf("服务器开始工作....\n");
 
    //将server套接字加入select中
-   addFdSelect(serverfd);
+   
 
     while(1){
-        
-       
-        
+        //清空套接字集合
+        FD_ZERO(&fdRead);
+        FD_ZERO(&fdWrite);
+        FD_ZERO(&fdExcept);
 
+        addFdSelect(serverfd);
+        //将sock_list套接字加入其中
+        for(auto iter : sock_list){
+            addFdSelect(iter);
+        }
+        
+        
+        //select阻塞的时间
+        timeval t = {3,0};
         //nfds 是一个整数值,是fd_set集合中所有描述符的范围,而不是数量
-        int ret = select(serverfd+1,&fdRead,&fdWrite,&fdExcept,NULL);
+        int ret = select(serverfd+1,&fdRead,&fdWrite,&fdExcept,&t);
         if(ret < 0){
             printf("select 任务结束.\n");
             break;
@@ -142,11 +167,30 @@ int main(void){
             if(SOCKET_ERROR == clientfd){
                 perror("accept 失败");
             }
-            sock_list.push_back(clientfd);
+
+            //serverfd执行读取命令
+            //processCmd(serverfd);
+            
+            //将新加入的客户端信息发送给其他的客户端,实现知道对面上线的功能
+            Join join;
+            memset(join.ipAddress,0,sizeof(join.ipAddress));
+            memcpy(join.ipAddress,inet_ntoa(client_addr.sin_addr),sizeof(inet_ntoa(client_addr.sin_addr)));
+            for(auto iter :sock_list){
+            //向每一个客户端发送Join的具体信息    
+                int ret = send(iter,(char*)&join,sizeof(struct Join),0);
+                printf("发送一个join信息\n");
+                if( -1 == ret){
+                    printf("send error\n");
+                }
+            }
+
+            
+            sock_list.push_back(clientfd);  
             printf("接收到新的客户端连接,ip:%s,port:%u...\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
+            
         }
 
-        //每一个fdRead里的套接字进行process
+        //每一个fdRead里的套接字进行processCmd
         for(size_t i = 0; i < fdRead.fd_count;i++){
             if(-1 == processCmd(fdRead.fd_array[i])){
                 //这个套接字断开连接
@@ -158,14 +202,16 @@ int main(void){
                 }
 
             }
-        }
 
-        //将接受到的客户端加入select监听
-        for(size_t n = 0;n < sock_list.size();n++){
-            addFdSelect(sock_list[n]);
         }
-        //将serverfd加入select监听
-        addFdSelect(serverfd);
+        printf("server 空闲时间执行其他的任务...\n");
+
+        // //将接受到的客户端加入select监听
+        // for(size_t n = 0;n < sock_list.size();n++){
+        //     addFdSelect(sock_list[n]);
+        // }
+        // //将serverfd加入select监听
+        // addFdSelect(serverfd);
 
     }
 
@@ -192,11 +238,12 @@ int addFdSelect(SOCKET fd){
 }
 
 
-//删除套接字
+//删除select套接字
 int delFdSelect(SOCKET fd){
     FD_CLR(fd,&fdRead);
     FD_CLR(fd,&fdWrite);
     FD_CLR(fd,&fdExcept);
+    return 0;
 }
 
 //处理cmd的程序
@@ -216,16 +263,17 @@ int processCmd(SOCKET _sock){
         switch (header.cmd)
         {
         case CMD_LOGIN:{
-            Login login = {};
-            recv(_sock,(char*)&login+sizeof(DataHeader),sizeof(Login)-sizeof(DataHeader),0);
+            struct Login login ;
+            recv(_sock,(char*)&login + sizeof(struct DataHeader),sizeof(struct Login) - sizeof(struct DataHeader),0);
            
             //省略判断用户的过程
             LogInResult ret ;
+            ret.result = 0;
             send(_sock,(const char*)&ret,sizeof(LogInResult),0);
 
             printf("客户端登录成功...\n");
             printf("用户名:%s,用户密码:%s\n",login.userName,login.passWord);
-            printf("result=%d\n",ret.result);
+            
             break;
             
         }
@@ -233,9 +281,10 @@ int processCmd(SOCKET _sock){
         case CMD_LOGOUT:{
             
             Logout logout= {};
-            recv(_sock,(char*)&logout,sizeof(Logout),0);
+            recv(_sock,(char*)&logout + sizeof(struct DataHeader),sizeof(struct Logout) - sizeof(struct DataHeader),0);
             //省略判断用户的过程
             LogOutResult ret  ;
+            ret.result = 0;
             send(_sock,(const char*)&ret,sizeof(LogInResult),0);
             
             printf("客户端 %s退出成功...\n",logout.userName);
