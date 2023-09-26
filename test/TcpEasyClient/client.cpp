@@ -97,7 +97,7 @@ int main(void){
     WSAStartup(ver,&dat);
     //1.创建socket套接字
     SOCKET serverfd = socket(AF_INET,SOCK_STREAM,0);
-    if(SOCKET_ERROR == serverfd){
+    if(INVALID_SOCKET == serverfd){
         perror("socket 失败!");
     }
 
@@ -105,7 +105,7 @@ int main(void){
 
     //2.进程connect连接
     struct sockaddr_in serveraddr;
-    serveraddr.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+    serveraddr.sin_addr.s_addr = inet_addr("127.0.0.1");
     serveraddr.sin_port = htons(1234);
     serveraddr.sin_family = AF_INET;
 
