@@ -263,8 +263,10 @@ int process(SOCKET serverfd,const DataHeader& header){
     //     printf("服务器数据异常\n");
     //     break;
     // }
+    
+    }
     return 0;
-}
+};
 
 //线程里的工作函数
 int working(SOCKET serverfd){
@@ -331,4 +333,4 @@ int working(SOCKET serverfd){
     }
   return 0;
 
-}
+};
