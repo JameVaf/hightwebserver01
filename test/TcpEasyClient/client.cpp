@@ -1,8 +1,21 @@
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
+    #include<windows.h>
+    #include<winsock2.h>
+#else
+    #include<unistd.h> 
+    #include<arpa/inet.h>
+    #include<sys/socket.h>
+    #include<string.h>
+    
+    #define SOCKET int
+    #define INVALID_SOCKET	(SOCKET)(~0)
+    #define SOCKET_ERROR	(-1)
+#endif
+
 #include<iostream>
-#include<windows.h>
-#include<winsock2.h>
 #include<thread>
+
 #pragma comment(lib,"ws2_32.lib")
 int ret = -1;
 #define CMDBUFF 128
@@ -91,10 +104,14 @@ int working(SOCKET serverfd);
 
 
 int main(void){
-    
+    #ifdef _WIN32
+
     WORD ver = MAKEWORD(2,2);
     WSADATA dat;
     WSAStartup(ver,&dat);
+    #else
+
+    #endif
     //1.创建socket套接字
     SOCKET serverfd = socket(AF_INET,SOCK_STREAM,0);
     if(INVALID_SOCKET == serverfd){
@@ -105,7 +122,7 @@ int main(void){
 
     //2.进程connect连接
     struct sockaddr_in serveraddr;
-    serveraddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    serveraddr.sin_addr.s_addr = inet_addr("192.168.189.57 ");
     serveraddr.sin_port = htons(1234);
     serveraddr.sin_family = AF_INET;
 
@@ -140,7 +157,7 @@ int main(void){
             printf("seletc 任务结束\n");
             break;
         }
-        printf("++++\n");
+       
         if(FD_ISSET(serverfd,&fdReads)){//服务器发来的数据
             FD_CLR(serverfd,&fdReads);
             //读取数据的缓冲区
@@ -153,7 +170,7 @@ int main(void){
           
             
         }
-        printf("++++++\n");
+     
 
 
 
@@ -183,8 +200,12 @@ int main(void){
 
 
     
+    #ifdef _WIN32
     closesocket(serverfd);
     WSACleanup();
+    #else
+    close(serverfd);
+    #endif
 
     return 0;
 }
@@ -192,6 +213,7 @@ int main(void){
 //处理server数据的process的实现
 int process(SOCKET serverfd,const DataHeader& header){
     //1.判断server传过来的命令
+    printf("process 开始工作\n");
     switch (header.cmd)
     {
     case CMD_JOIN: {//server发送的是join信息
@@ -229,6 +251,7 @@ int process(SOCKET serverfd,const DataHeader& header){
         printf("服务器数据异常\n");
         break;
     }
+    return 0;
 }
 
 //线程里的工作函数
@@ -293,5 +316,5 @@ int working(SOCKET serverfd){
         }
     }
   
-
+    return 0;
 }
