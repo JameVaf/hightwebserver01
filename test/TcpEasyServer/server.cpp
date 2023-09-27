@@ -1,10 +1,23 @@
 #define WIN32_LEAN_AND_MEAN
-#include <iostream>
-#include <windows.h>
-#include <winsock2.h>
-#include <vector>
-#include <algorithm>
-#include <string.h>
+#ifdef _WIN32
+    #include<windows.h>
+    #include<winsock2.h>
+#else
+    #include<unistd.h> 
+    #include<arpa/inet.h>
+    #include<sys/socket.h>
+    #include<string.h>
+    
+    #define SOCKET int
+    #define INVALID_SOCKET	(SOCKET)(~0)
+    #define SOCKET_ERROR	(-1)
+#endif
+
+#include<iostream>
+#include<thread>
+#include<vector>
+#include<algorithm>
+
 #pragma comment(lib, "ws2_32.lib")
 int ret = -1;
 
@@ -104,15 +117,20 @@ int delFdSelect(SOCKET fd);
 // 处理cmd的程序
 int processCmd(SOCKET _sock);
 
+bool g_isrun = true;
+
 int main(void)
 {
-
+    #ifdef _WIN32
     WORD ver = MAKEWORD(2, 2);
     WSADATA dat;
     WSAStartup(ver, &dat);
+    #else
+
+    #endif
     // 1.创建socket套接字
     SOCKET serverfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (SOCKET_ERROR == serverfd)
+    if (INVALID_SOCKET == serverfd)
     {
         perror("socket 失败!");
     }
@@ -139,7 +157,7 @@ int main(void)
 
     // 将server套接字加入select中
 
-    while (1)
+    while (g_isrun)
     {
         // 清空套接字集合
         FD_ZERO(&fdRead);
@@ -184,7 +202,7 @@ int main(void)
             for (auto iter : sock_list)
             {
                 // 向每一个客户端发送Join的具体信息
-                int ret = send(iter, (char *)&join, sizeof(struct Join), 0);
+                int ret = (int)send(iter, (char *)&join, sizeof(struct Join), 0);
                 printf("发送一个join信息\n");
                 if (-1 == ret)
                 {
@@ -207,11 +225,15 @@ int main(void)
                 {
 
                     sock_list.erase(iter);
+                    #ifdef _WIN32
                     closesocket(fdRead.fd_array[i]);
+                    #else
+                    close(fdRead.fd_array[i]);
+                    #endif
                 }
             }
         }
-        printf("server 空闲时间执行其他的任务...\n");
+       // printf("server 空闲时间执行其他的任务...\n");
 
         // //将接受到的客户端加入select监听
         // for(size_t n = 0;n < sock_list.size();n++){
@@ -224,14 +246,20 @@ int main(void)
     // 关闭sock_list 中的套接字
     for (size_t n = 0; n < sock_list.size(); n++)
     {
+        #ifdef _WIN32
         closesocket(sock_list[n]);
+        #else
+        close(sock_list[n]);
+        #endif
     }
 
     sock_list.clear();
-
+    #ifdef _WIN32
     closesocket(serverfd);
-
     WSACleanup();
+    #else
+    close(serverfd);
+    #endif
     return 0;
 }
 // 添加套接字到select
@@ -257,7 +285,7 @@ int processCmd(SOCKET _sock)
 {
     // 5.读取客户端的命令
     DataHeader header = {0};
-    int readLen = recv(_sock, (char *)&header, sizeof(DataHeader), 0);
+    int readLen = (int)recv(_sock, (char *)&header, sizeof(DataHeader), 0);
     if (readLen <= 0)
     {
         perror("read 失败...");
@@ -279,7 +307,8 @@ int processCmd(SOCKET _sock)
             // 省略判断用户的过程
             LogInResult ret;
             ret.result = 0;
-            send(_sock, (const char *)&ret, sizeof(LogInResult), 0);
+            int sendNumber =  (int)send(_sock, (const char *)&ret, sizeof(LogInResult), 0);
+            printf("Send client :%d\n",sendNumber);
 
             printf("客户端登录成功...\n");
             printf("用户名:%s,用户密码:%s\n", login.userName, login.passWord);
@@ -309,6 +338,7 @@ int processCmd(SOCKET _sock)
             printf("收到的cmd:CMD_QUIT,数据长度:%d\n",  header.dataLength);
 
             printf("服务器关闭...\n");
+            g_isrun = false;
             break;
             
         }

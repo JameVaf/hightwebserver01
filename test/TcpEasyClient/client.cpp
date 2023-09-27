@@ -102,6 +102,7 @@ int process(SOCKET serverfd,const DataHeader& header);
 //CMD命令的线程工作函数
 int working(SOCKET serverfd);
 
+bool g_isrun = true;
 
 int main(void){
     #ifdef _WIN32
@@ -122,13 +123,16 @@ int main(void){
 
     //2.进程connect连接
     struct sockaddr_in serveraddr;
-    serveraddr.sin_addr.s_addr = inet_addr("192.168.189.57 ");
+    serveraddr.sin_addr.s_addr = inet_addr("192.168.189.171 ");
     serveraddr.sin_port = htons(1234);
     serveraddr.sin_family = AF_INET;
 
     ret = connect(serverfd,(sockaddr*)&serveraddr,sizeof(serveraddr));
+    
+    #ifdef _WIN32
     int error =  WSAGetLastError();
-    //printf("error:%d\n",error);
+    printf("error:%d\n",error);
+    #endif
 
     if(SOCKET_ERROR == ret){
         printf("ret = %d\n",ret);
@@ -137,12 +141,13 @@ int main(void){
     }
 
     printf("客户端开始连接...\n");
+    
     //向server发送CMD
     std::thread t(working,serverfd);
     t.detach();
     
 
-    while(1){
+    while(g_isrun){
         
 
 
@@ -150,27 +155,34 @@ int main(void){
         FD_ZERO(&fdReads);
         FD_SET(serverfd,&fdReads);
         
-        printf("第%d次select 开始工作\n",++testnumnber);
-        int ret = select(serverfd,&fdReads,nullptr,nullptr,0);
-        printf("ret = %d\n",ret);
+        struct timeval t;
+        t.tv_sec = 1;
+        t.tv_usec = 0; 
+        //printf("第%d次select 开始工作\n",++testnumnber);
+        int ret = select(serverfd + 1,&fdReads,nullptr,nullptr,&t);
+        //printf("ret = %d\n",ret);
         if( ret < 0){
             printf("seletc 任务结束\n");
             break;
         }
-       
+      
+        
         if(FD_ISSET(serverfd,&fdReads)){//服务器发来的数据
+        
             FD_CLR(serverfd,&fdReads);
             //读取数据的缓冲区
             //char readbuff[512] = {0};
             //构造datahead接受数据
+
             struct DataHeader  clientHead = {0};
-            if(-1 == recv(serverfd,(char*)&clientHead,sizeof(struct DataHeader),0)){
-                process(serverfd,clientHead);
+            recv(serverfd,(char*)&clientHead,sizeof(struct DataHeader),0);
+            if(-1 == process(serverfd,clientHead)){
+               break;
             }
           
             
         }
-     
+        
 
 
 
@@ -195,11 +207,10 @@ int main(void){
         // printf("server send:%s\n",readBuff);
         // memset(readBuff,0,READBUFF);
 
-
+        
     }
 
 
-    
     #ifdef _WIN32
     closesocket(serverfd);
     WSACleanup();
@@ -213,23 +224,24 @@ int main(void){
 //处理server数据的process的实现
 int process(SOCKET serverfd,const DataHeader& header){
     //1.判断server传过来的命令
-    printf("process 开始工作\n");
+    
     switch (header.cmd)
     {
     case CMD_JOIN: {//server发送的是join信息
     //读取接受缓冲区里的数据
     char readBuff [124] = {0}; 
-    int ret = recv(serverfd,readBuff,sizeof(readBuff),0);
+    int ret = (int)recv(serverfd,readBuff,sizeof(readBuff),0);
     if(-1 == ret){
         printf("server发过来的数据接受失败!\n");
         return -1;
     }
+    
     printf("新加入一个连接,ip:%s\n",readBuff);
     break;
     }
     case CMD_LOGIN_RESULT:{
         int result = -1;
-        int ret = recv(serverfd,(char*)&result,sizeof(result),0);
+        int ret = (int)recv(serverfd,(char*)&result,sizeof(result),0);
         if(-1 == ret){
             printf("接受结果失败");
         }
@@ -239,7 +251,7 @@ int process(SOCKET serverfd,const DataHeader& header){
     }
     case CMD_LOGOUT_RESULT:{
         int result = -1;
-        int ret = recv(serverfd,(char*)&result,sizeof(result),0);
+        int ret = (int)recv(serverfd,(char*)&result,sizeof(result),0);
         if(-1 == ret){
             printf("接受结果失败");
         }
@@ -247,10 +259,10 @@ int process(SOCKET serverfd,const DataHeader& header){
         printf("登出server返回的结果为:%d\n",result);
         break;
     }
-    default:
-        printf("服务器数据异常\n");
-        break;
-    }
+    // default:
+    //     printf("服务器数据异常\n");
+    //     break;
+    // }
     return 0;
 }
 
@@ -276,7 +288,7 @@ int working(SOCKET serverfd){
             strncpy(login.passWord,cmdBuff,strlen(cmdBuff)+1);
             //scanf("%s\n",cmdBuff);
             //3.将命令发送给服务器
-            int ret = send(serverfd,(char*)&login,sizeof(struct Login),0);
+            int ret = (int)send(serverfd,(char*)&login,sizeof(struct Login),0);
             if( -1 == ret){
                 printf("send Login命令到server失败\n");
                 return -1;
@@ -292,7 +304,7 @@ int working(SOCKET serverfd){
             std::cin>>cmdBuff;
             strncpy(logout.userName,cmdBuff,strlen(cmdBuff)+1);
             //发送指令
-            int ret = send(serverfd,(const char*)&logout,sizeof(struct Logout),0);
+            int ret = (int)send(serverfd,(const char*)&logout,sizeof(struct Logout),0);
             if( -1 == ret){
                 printf("send Login命令到server失败\n");
                 return -1;
@@ -305,7 +317,9 @@ int working(SOCKET serverfd){
             //发送指令
             
             send(serverfd,(const char*)&quit01,sizeof(DataHeader),0);
-            printf("客户端开始关闭...");
+           
+            printf("客户端开始关闭...\n");
+            g_isrun = false;
             return 0;
             
         }else{
@@ -315,6 +329,6 @@ int working(SOCKET serverfd){
             
         }
     }
-  
-    return 0;
+  return 0;
+
 }
