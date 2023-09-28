@@ -2,6 +2,7 @@
 #ifdef _WIN32
     #include<windows.h>
     #include<winsock2.h>
+    #pragma comment(lib, "ws2_32.lib")
 #else
     #include<unistd.h> 
     #include<arpa/inet.h>
@@ -18,16 +19,17 @@
 #include<vector>
 #include<algorithm>
 
-#pragma comment(lib, "ws2_32.lib")
+
 int ret = -1;
 
 #define READBUFF 1024
 char readBuff[READBUFF] = {0};
 std::vector<SOCKET> sock_list; // 存放接受连接的socket套接字
 
-struct fd_set fdRead;
-struct fd_set fdWrite;
-struct fd_set fdExcept;
+ fd_set fdRead;
+ fd_set fdWrite;
+ fd_set fdExcept;
+
 
 // 命令宏
 enum CMD
@@ -138,7 +140,7 @@ int main(void)
     // 2.bind 绑定ip地址
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.S_un.S_addr = ADDR_ANY;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(1234);
     ret = bind(serverfd, (sockaddr *)&server_addr, sizeof(server_addr));
     if (-1 == ret)
@@ -170,11 +172,19 @@ int main(void)
         {
             addFdSelect(iter);
         }
+        //获得max_sock
+        SOCKET max_sock = serverfd;
+        for(auto iter: sock_list){
+            if(max_sock < iter){
+                max_sock = iter;
+            }
+        }
+
 
         // select阻塞的时间
         timeval t = {3, 0};
         // nfds 是一个整数值,是fd_set集合中所有描述符的范围,而不是数量
-        int ret = select(serverfd + 1, &fdRead, &fdWrite, &fdExcept, &t);
+        int ret = select(max_sock + 1, &fdRead, &fdWrite, &fdExcept, &t);
         if (ret < 0)
         {
             printf("select 任务结束.\n");
@@ -185,7 +195,7 @@ int main(void)
             delFdSelect(serverfd);
             // 4.accept接受客户端的数据
             struct sockaddr_in client_addr = {};
-            int client_addr_len = sizeof(client_addr);
+            socklen_t client_addr_len = sizeof(client_addr);
             SOCKET clientfd = accept(serverfd, (sockaddr *)&client_addr, &client_addr_len);
             if (SOCKET_ERROR == clientfd)
             {
@@ -215,21 +225,26 @@ int main(void)
         }
 
         // 每一个fdRead里的套接字进行processCmd
-        for (size_t i = 0; i < fdRead.fd_count; i++)
+        for (int i = 0; i < sock_list.size(); i++)
         {
-            if (-1 == processCmd(fdRead.fd_array[i]))
-            {
-                // 这个套接字断开连接
-                auto iter = find(sock_list.begin(), sock_list.end(), fdRead.fd_array[i]);
-                if (iter != sock_list.end())
+            if(FD_ISSET(sock_list[i],&fdRead)){
+                if (-1 == processCmd(sock_list[i]))
                 {
-
-                    sock_list.erase(iter);
-                    #ifdef _WIN32
-                    closesocket(fdRead.fd_array[i]);
-                    #else
-                    close(fdRead.fd_array[i]);
-                    #endif
+                    // 这个套接字断开连接
+                    auto  iter = sock_list.begin()+i;
+                    if(iter != sock_list.end()){
+                        SOCKET temp = *iter;
+                        sock_list.erase(iter);
+                        #ifdef _WIN32
+                        closesocket(fdRead.fd_array[i]);
+                        #else
+                        close(temp);
+                        #endif
+                    }
+                    
+                       
+                      
+                    
                 }
             }
         }
