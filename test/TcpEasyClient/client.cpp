@@ -1,5 +1,6 @@
-#define WIN32_LEAN_AND_MEAN
+
 #ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
     #include<windows.h>
     #include<winsock2.h>
 #else
@@ -24,7 +25,7 @@ int ret = -1;
 char cmdBuff [CMDBUFF] = {0};
 char readBuff [READBUFF] = {0};
 
-static int testnumnber = 0;
+
 
 //命令宏
 enum CMD{
@@ -141,7 +142,7 @@ int main(void){
        
     }
 
-    printf("客户端开始连接...\n");
+    //printf("客户端开始连接...\n");
     
     //向server发送CMD
     std::thread t(working,serverfd);
